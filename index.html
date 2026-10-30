@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TSP Lab: evolve the shortest route</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef3f0;--panel:#fbfdfc;--text:#12263a;--muted:#5b6f7d;--border:#cfdad5;--route:#c2185b;--node:#0f766e;--depot:#d99a00;--zone:rgba(217,154,0,.22);--flood:#1d4ed8;--accent:#0f766e;--accent-text:#fff;--grid:#dde7e2;--bgyfill:#e1ebe6;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1b2a;--panel:#142535;--text:#e6eef2;--muted:#93a8b5;--border:#27405a;--route:#ff6fa5;--node:#4fd1c5;--depot:#f5c042;--zone:rgba(245,192,66,.2);--flood:#6ea8ff;--accent:#4fd1c5;--accent-text:#0e1b2a;--grid:#1d3247;--bgyfill:#1b3248;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1b2a;--panel:#142535;--text:#e6eef2;--muted:#93a8b5;--border:#27405a;--route:#ff6fa5;--node:#4fd1c5;--depot:#f5c042;--zone:rgba(245,192,66,.2);--flood:#6ea8ff;--accent:#4fd1c5;--accent-text:#0e1b2a;--grid:#1d3247;--bgyfill:#1b3248;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+h1,h2{font-family:"Bricolage Grotesque",system-ui,sans-serif;margin:0}
+header{padding:20px 20px 4px;max-width:1100px;margin:0 auto}
+h1{font-size:clamp(1.6rem,4vw,2.3rem);font-weight:700;letter-spacing:-.01em}
+header p{margin:4px 0 0;color:var(--muted);max-width:60ch}
+main{display:flex;flex-wrap:wrap;gap:16px;padding:16px 20px 28px;max-width:1100px;margin:0 auto}
+.stage{flex:1 1 440px;min-width:0}
+.side{flex:1 1 300px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+canvas{display:block;width:100%;border-radius:8px;background:var(--panel);touch-action:manipulation}
+#map{aspect-ratio:1/1;border:1px solid var(--border);cursor:crosshair}
+#chart{height:110px;margin-top:10px;border:1px solid var(--border)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+.stat b{display:block;font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:1.25rem;line-height:1.2}
+.stat span{color:var(--muted);font-size:.78rem}
+h2{font-size:1rem;margin-bottom:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:8px;padding:8px 12px;min-height:40px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--route);outline-offset:2px}
+label{display:flex;justify-content:space-between;gap:10px;font-size:.88rem;margin-top:8px}
+label output{color:var(--muted);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.hint{color:var(--muted);font-size:.84rem;margin:8px 0 0}
+#log{margin:0;padding:0;list-style:none;font-size:.84rem;max-height:120px;overflow:auto}
+#log li{padding:3px 0;border-bottom:1px solid var(--border)}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:6px}
+.rt{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:6px}.rt th,.rt td{border-bottom:1px solid var(--border);padding:3px 4px;text-align:left}.rt .win td{font-weight:700;color:var(--accent)}
+details{margin-top:8px;font-size:.84rem}summary{cursor:pointer}
+.rt.sm{font-size:.74rem}.rt.sm th,.rt.sm td{padding:3px 3px}.rt td.p{color:var(--accent)}.rt td.f{color:var(--route);font-weight:700}
+</style>
+</head>
+<body>
+<header>
+<h1>TSP Lab: evolve the shortest route</h1>
+<p>A genetic algorithm breeds tours of the stops below. Change the map while it runs and watch the population adapt instead of starting over.</p>
+</header>
+<main>
+<section class="stage" aria-label="Route map">
+<canvas id="map" role="img" aria-label="Map of stops with the best route found so far"></canvas>
+<div class="stats" aria-live="off">
+<div class="stat"><b id="sGen">0</b><span>generation</span></div>
+<div class="stat"><b id="sBest">0</b><span id="sUnit">best cost</span></div>
+<div class="stat"><b id="sNn">0</b><span>greedy baseline</span></div>
+<div class="stat"><b id="sGain">0%</b><span>shorter than greedy</span></div>
+</div>
+<canvas id="chart" role="img" aria-label="Best route cost over generations"></canvas>
+</section>
+<aside class="side">
+<div class="card">
+<h2>Run</h2>
+<div class="row">
+<button id="play" class="primary">Pause</button>
+<button id="rand">New random map</button>
+<button id="santa">Santa Rosa, Laguna</button>
+</div>
+<label>Stops on random map <output id="oN">30</output></label>
+<input id="rN" type="range" min="8" max="120" value="30">
+<p class="hint" id="modeHint">Random map: cost is straight-line distance.</p>
+</div>
+<div class="card">
+<h2>Change the world</h2>
+<div class="row">
+<button id="rush">Rush order</button>
+<button id="traffic" aria-pressed="false">Traffic jam</button>
+<button id="flood" aria-pressed="false">Flood a stop</button>
+</div>
+<div class="row" style="margin-top:8px" role="group" aria-label="Map click action">
+<button id="mAdd" aria-pressed="true">Click adds a stop</button>
+<button id="mDel" aria-pressed="false">Click removes a stop</button>
+</div>
+<p class="hint">Traffic makes links to the shaded zone 1.6 times costlier. A flooded stop (blue) costs 3 times more to reach. The depot (gold) cannot be removed.</p>
+</div>
+<div class="card">
+<h2>Evolution settings</h2>
+<label>Speed <output id="oS">3</output></label>
+<input id="rS" type="range" min="1" max="12" value="3">
+<label>Mutation rate <output id="oM">25%</output></label>
+<input id="rM" type="range" min="0" max="80" value="25">
+<label>2-opt refinement <output id="oL">8%</output></label>
+<input id="rL" type="range" min="0" max="50" value="8">
+<p class="hint">Raise 2-opt for faster convergence, lower it to watch the population search on its own.</p>
+</div>
+<div class='card'>
+<h2>Use case scenarios</h2>
+<div class='row' id='scBtns'><button data-sc='S1'>S1 Small route</button><button data-sc='S2'>S2 Large batch</button><button data-sc='S3'>S3 Real-time</button><button data-sc='S4'>S4 Orders change</button><button data-sc='S5'>S5 Traffic + flood</button></div>
+<p class='hint' id='scDesc'>Pick a scenario to load its setup into the lab, then race the algorithms on it.</p>
+<div class='row' style='margin-top:8px;align-items:center'><button id='race' class='primary'>Race algorithms</button><label style='margin:0;gap:6px;align-items:center'>Budget <select id='raceMs'><option value='250'>250 ms</option><option value='1000' selected>1 s</option><option value='3000'>3 s</option></select></label></div>
+<div id='raceOut' class='hint'>Runs greedy, 2-opt, annealing, tabu search and the GA for the same time on the current map and costs.</div>
+<details><summary>Measured results from the Python experiments</summary><table class='rt'><tr><th>Scenario</th><th>Best</th><th>Result</th></tr><tr><td>S1 10 stops, 50 ms</td><td>GA, SA, Tabu</td><td>all optimal; greedy +4.2%</td></tr><tr><td>S2 150 stops, 6 s</td><td>GA</td><td>SA +1.5%, Tabu +17%</td></tr><tr><td>S3 60 and 150 stops, 250 ms</td><td>GA</td><td>SA +2.5% to 2.8%</td></tr><tr><td>S4 orders change</td><td>GA</td><td>SA, Tabu +2.4% to 3.2%</td></tr><tr><td>S5 traffic + flood</td><td>all metaheuristics</td><td>greedy +37.9% in flood</td></tr></table><p class='hint'>From scenarios.py (pure Python, 2 to 5 instances). The live race below uses this page's JavaScript versions, so numbers differ.</p></details>
+<details open><summary>Test cases and use cases on all five algorithms</summary>
+<p class='hint'>Measured in a second Python run (algo_tests.py). Pass limits were fixed beforehand: gap to the exact optimum at most 1% for GA, SA and Tabu, 10% for 2-opt, 40% for greedy (NN); use cases must be within 2% of the best method, or 1% of the exact optimum.</p>
+<table class='rt sm'><tr><th>Test case</th><th>NN</th><th>2-opt</th><th>SA</th><th>Tabu</th><th>GA</th></tr>
+<tr><td>TC-01 Square = 4</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td></tr>
+<tr><td>TC-02 Valid tours</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td></tr>
+<tr><td>TC-03 Gap vs exact, 10 stops</td><td class=p>24.3%</td><td class=p>0.5%</td><td class=p>0.0%</td><td class=p>0.5%</td><td class=p>0.0%</td></tr>
+<tr><td>TC-04 Circle perimeter</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td></tr>
+<tr><td>TC-05 Add 5, remove 2</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td></tr>
+<tr><td>TC-06 Never worsens</td><td>n/a</td><td>n/a</td><td class=p>PASS</td><td class=p>PASS</td><td class=p>PASS</td></tr>
+<tr><td>TC-07 Flood re-plan cost</td><td class=p>416 to 670</td><td class=p>407</td><td class=p>407</td><td class=p>407</td><td class=p>407</td></tr>
+<tr><td><b>Passed</b></td><td><b>6/6</b></td><td><b>6/6</b></td><td><b>7/7</b></td><td><b>7/7</b></td><td><b>7/7</b></td></tr></table>
+<table class='rt sm' style='margin-top:10px'><tr><th>Use case</th><th>NN</th><th>2-opt</th><th>SA</th><th>Tabu</th><th>GA</th></tr>
+<tr><td>UC-01 Small route</td><td class=f>4.2%</td><td class=p>0.2%</td><td class=p>0.0%</td><td class=p>0.0%</td><td class=p>0.0%</td></tr>
+<tr><td>UC-02 Big batch</td><td class=f>29.9%</td><td class=f>5.7%</td><td class=p>0.3%</td><td class=f>17.1%</td><td class=p>0.0%</td></tr>
+<tr><td>UC-03 Real-time</td><td class=f>22.8%</td><td class=f>5.6%</td><td class=f>2.1%</td><td class=f>13.7%</td><td class=p>0.0%</td></tr>
+<tr><td>UC-04 Orders change</td><td class=f>24.0%</td><td class=f>5.0%</td><td class=f>2.8%</td><td class=f>3.0%</td><td class=p>0.2%</td></tr>
+<tr><td>UC-05 Traffic + flood</td><td class=f>12.7%</td><td class=p>0.2%</td><td class=p>0.0%</td><td class=p>0.0%</td><td class=p>0.0%</td></tr>
+<tr><td><b>Accepted</b></td><td><b>0/5</b></td><td><b>2/5</b></td><td><b>3/5</b></td><td><b>2/5</b></td><td><b>5/5</b></td></tr></table>
+<p class='hint'>Use case values are % above the exact optimum (UC-01, UC-05) or above the best method (the others). SA missed UC-03 by only 0.1 point. In TC-07 every method returned a valid tour, but the greedy route cost 670 against 407 for the others. Decimals differ slightly from the report run because time-limited methods vary from run to run.</p></details>
+</div>
+<div class="card">
+<h2>Event log</h2>
+<ul id="log"><li>Ready. Click the map to add stops.</li></ul>
+</div>
+</aside>
+</main>
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id)};
+var SANTA=[["Laguna Technopark (depot)",14.2613265,121.0575963],["SM City Sta. Rosa",14.3115473,121.0985251],["Robinsons Sta. Rosa",14.3191667,121.0966667],["Balibago Complex",14.2915997,121.0980124],["Santa Rosa City Hall",14.3146492,121.1124535],["Paseo de Santa Rosa",14.2477814,121.0631716],["Paseo Outlets",14.2485967,121.0643075],["Vista Mall Sta. Rosa",14.2434182,121.0580339],["Ayala Malls Nuvali",14.2367513,121.0577278],["QualiMed Hospital",14.2321549,121.0528732]];
+var BGY=[["Aplaya",[[[121.1255,14.3104],[121.1243,14.3174],[121.1177,14.3248],[121.1161,14.3238],[121.1203,14.3162],[121.1217,14.3123],[121.1223,14.3102],[121.1255,14.3104]]]],["Balibago",[[[121.1113,14.2984],[121.1046,14.2996],[121.0997,14.2946],[121.0903,14.2908],[121.0885,14.2892],[121.0914,14.2796],[121.0987,14.2775],[121.103,14.2853],[121.1055,14.2929],[121.1113,14.2984]]]],["Caingin",[[[121.1255,14.3104],[121.1223,14.3102],[121.1208,14.3095],[121.1215,14.3067],[121.1218,14.2967],[121.1281,14.2963],[121.1255,14.3104]]]],["Dila",[[[121.1218,14.2967],[121.1113,14.2984],[121.1055,14.2929],[121.103,14.2853],[121.1113,14.2878],[121.1265,14.2874],[121.1281,14.2963],[121.1218,14.2967]]]],["Dita",[[[121.1265,14.2874],[121.1113,14.2878],[121.103,14.2853],[121.0987,14.2775],[121.0914,14.2796],[121.0956,14.2712],[121.1023,14.2757],[121.1156,14.2746],[121.122,14.2774],[121.1265,14.2874]]]],["Don Jose",[[[121.0956,14.2712],[121.0843,14.2622],[121.0755,14.2649],[121.0727,14.2768],[121.0583,14.2634],[121.0543,14.2564],[121.0511,14.2456],[121.0523,14.2398],[121.0548,14.244],[121.0611,14.241],[121.0628,14.2354],[121.073,14.239],[121.079,14.2336],[121.0861,14.2306],[121.0957,14.2378],[121.1098,14.2407],[121.1142,14.2512],[121.1107,14.2525],[121.0955,14.2507],[121.0901,14.258],[121.0991,14.2645],[121.0956,14.2712]]]],["Ibaba",[[[121.1217,14.3123],[121.1203,14.3162],[121.1145,14.3141],[121.1217,14.3123]]]],["Labas",[[[121.1114,14.3099],[121.1073,14.313],[121.1011,14.3094],[121.1057,14.3026],[121.1215,14.3067],[121.1208,14.3095],[121.1114,14.3099]]]],["Macabling",[[[121.1057,14.3026],[121.1011,14.3094],[121.0959,14.3056],[121.0896,14.3057],[121.0881,14.2967],[121.0903,14.2908],[121.0997,14.2946],[121.1046,14.2996],[121.1057,14.3026]]]],["Malitlit",[[[121.1156,14.2746],[121.1023,14.2757],[121.0956,14.2712],[121.0991,14.2645],[121.0901,14.258],[121.0955,14.2507],[121.1107,14.2525],[121.1142,14.2512],[121.1185,14.2557],[121.1142,14.2654],[121.1156,14.2746]]]],["Malusak",[[[121.1145,14.3141],[121.1123,14.3148],[121.1123,14.3145],[121.1114,14.3099],[121.1208,14.3095],[121.1223,14.3102],[121.1217,14.3123],[121.1145,14.3141]]]],["Market Area",[[[121.1161,14.3238],[121.112,14.3253],[121.1123,14.3148],[121.1145,14.3141],[121.1203,14.3162],[121.1161,14.3238]]]],["Kanluran",[[[121.1123,14.3145],[121.1073,14.313],[121.1114,14.3099],[121.1123,14.3145]]]],["Pooc",[[[121.1218,14.2967],[121.1215,14.3067],[121.1057,14.3026],[121.1046,14.2996],[121.1113,14.2984],[121.1218,14.2967]]]],["Pulong Santa Cruz",[[[121.0885,14.2892],[121.0809,14.2806],[121.0727,14.2768],[121.0755,14.2649],[121.0843,14.2622],[121.0956,14.2712],[121.0914,14.2796],[121.0885,14.2892]]]],["Santo Domingo",[[[121.0861,14.2306],[121.079,14.2336],[121.073,14.239],[121.0628,14.2354],[121.0611,14.241],[121.0548,14.244],[121.0523,14.2398],[121.0468,14.2289],[121.0528,14.2163],[121.0593,14.2197],[121.0654,14.2196],[121.077,14.2276],[121.0861,14.2306]]]],["Sinalhan",[[[121.1177,14.3248],[121.1147,14.3296],[121.1051,14.3356],[121.0971,14.3338],[121.0962,14.3279],[121.1072,14.3284],[121.112,14.3253],[121.1161,14.3238],[121.1177,14.3248]]]],["Tagapo",[[[121.112,14.3253],[121.1072,14.3284],[121.0962,14.3279],[121.0972,14.323],[121.0887,14.3174],[121.0896,14.3057],[121.0959,14.3056],[121.1011,14.3094],[121.1073,14.313],[121.1123,14.3145],[121.1123,14.3148],[121.112,14.3253]]]]];
+var mode="random",pts=[],D=[],pop=[],fit=[],gen=0,nextId=1,floodId=-1,traffic=false,running=true;
+var hist=[],marks=[],nnLen=0,POP=80,K=5,ELITE=2,CX=0.9,rushN=0;
+var proj={latC:14.28,lonC:121.085,cos:Math.cos(14.28*Math.PI/180),S:1};
+function rnd(n){return Math.floor(Math.random()*n)}
+function hav(a,b){var R=6371,r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r;var h=Math.sin(dl/2)*Math.sin(dl/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)*Math.sin(dn/2);return 2*R*Math.asin(Math.sqrt(h))}
+function base(a,b){return mode==="santa"?hav(a,b)*1.3:Math.hypot(a.u-b.u,a.v-b.v)*100}
+function inZone(p){return mode==="santa"?(p.lat<14.255&&p.lon<121.07):p.v>0.66}
+function setProj(){proj.latC=14.276;proj.lonC=121.0875;proj.S=1/(0.1193*1.06)}
+function llToUv(p){p.u=0.5+(p.lon-proj.lonC)*proj.cos*proj.S;p.v=0.5-(p.lat-proj.latC)*proj.S}
+function uvToLl(p){p.lon=proj.lonC+(p.u-0.5)/(proj.cos*proj.S);p.lat=proj.latC-(p.v-0.5)/proj.S}
+function mk(u,v,name){var p={id:nextId++,u:u,v:v,name:name||""};if(mode==="santa")uvToLl(p);p.zone=inZone(p);return p}
+function log(t){var li=document.createElement("li");li.textContent="Gen "+gen+": "+t;var ul=$("log");ul.insertBefore(li,ul.firstChild);while(ul.children.length>30)ul.removeChild(ul.lastChild)}
+function costMatrix(){var n=pts.length;D=[];for(var i=0;i<n;i++)D.push(new Float64Array(n));for(i=0;i<n;i++)for(var j=i+1;j<n;j++){var d=base(pts[i],pts[j]),f=1;if(traffic&&(pts[i].zone||pts[j].zone))f*=1.6;if(floodId>=0&&(pts[i].id===floodId||pts[j].id===floodId))f*=3;D[i][j]=D[j][i]=d*f}}
+function len(t){var s=0,pr=t[t.length-1];for(var i=0;i<t.length;i++){s+=D[pr][t[i]];pr=t[i]}return s}
+function nn(){var n=pts.length,left=[],t=[0],i;for(i=1;i<n;i++)left.push(i);while(left.length){var l=t[t.length-1],bi=0;for(i=1;i<left.length;i++)if(D[l][left[i]]<D[l][left[bi]])bi=i;t.push(left[bi]);left.splice(bi,1)}return len(t)}
+function score(){fit=pop.map(len);nnLen=nn()}
+function initPop(){var n=pts.length;pop=[];for(var k=0;k<POP;k++){var t=[];for(var i=0;i<n;i++)t.push(i);for(i=n-1;i>0;i--){var j=rnd(i+1),x=t[i];t[i]=t[j];t[j]=x}pop.push(t)}gen=0;hist=[];marks=[];score()}
+function ox(p1,p2){var n=p1.length;if(n<3)return p1.slice();var a=rnd(n),b=rnd(n);if(a>b){var x=a;a=b;b=x}var c=new Array(n).fill(-1),used={};for(var i=a;i<=b;i++){c[i]=p1[i];used[p1[i]]=1}var pos=(b+1)%n;for(i=0;i<n;i++){var g=p2[(b+1+i)%n];if(!used[g]){c[pos]=g;pos=(pos+1)%n}}return c}
+function mutate(t){var n=t.length;if(n<3)return;var i=rnd(n),j=rnd(n);if(i>j){var x=i;i=j;j=x}if(Math.random()<0.7){while(i<j){var y=t[i];t[i]=t[j];t[j]=y;i++;j--}}else{var z=t[i];t[i]=t[j];t[j]=z}}
+function twoOpt(t){var n=t.length;for(var pass=0;pass<2;pass++){var imp=false;for(var i=0;i<n-1;i++)for(var j=i+2;j<n;j++){if(i===0&&j===n-1)continue;var a=t[i],b=t[i+1],c=t[j],d=t[(j+1)%n];if(D[a][c]+D[b][d]<D[a][b]+D[c][d]-1e-9){var l=i+1,r=j;while(l<r){var y=t[l];t[l]=t[r];t[r]=y;l++;r--}imp=true}}if(!imp)break}}
+function tourn(){var b=-1;for(var i=0;i<K;i++){var c=rnd(pop.length);if(b<0||fit[c]<fit[b])b=c}return pop[b]}
+function step(){var mut=$("rM").value/100,loc=$("rL").value/100;var idx=fit.map(function(_,i){return i}).sort(function(a,b){return fit[a]-fit[b]});var np=[];for(var e=0;e<ELITE&&e<idx.length;e++)np.push(pop[idx[e]].slice());while(np.length<POP){var c=Math.random()<CX?ox(tourn(),tourn()):tourn().slice();if(Math.random()<mut)mutate(c);if(Math.random()<loc&&c.length>3)twoOpt(c);np.push(c)}pop=np;fit=pop.map(len);gen++}
+function best(){var b=0;for(var i=1;i<fit.length;i++)if(fit[i]<fit[b])b=i;return b}
+function addStop(p,label){pts.push(p);var nw=pts.length-1;costMatrix();pop.forEach(function(t){var bp=0,bc=1e18;for(var q=0;q<t.length;q++){var a=t[(q+t.length-1)%t.length],b=t[q],c=D[a][nw]+D[nw][b]-D[a][b];if(c<bc){bc=c;bp=q}}t.splice(bp,0,nw)});score();marks.push([hist.length,"+"]);log(label||"stop added; every tour repaired by cheapest insertion")}
+function delStop(i){if(i<=0||pts.length<=4)return;if(pts[i].id===floodId)floodId=-1;pts.splice(i,1);pop=pop.map(function(t){var r=[];t.forEach(function(c){if(c!==i)r.push(c>i?c-1:c)});return r});costMatrix();score();marks.push([hist.length,"-"]);log("stop removed; tours repaired")}
+function loadRandom(n){mode="random";pts=[];nextId=1;floodId=-1;pts.push(mk(0.5,0.5,"Depot"));for(var i=1;i<n;i++)pts.push(mk(0.06+Math.random()*0.88,0.06+Math.random()*0.88));costMatrix();initPop();$("modeHint").textContent="Random map: cost is straight-line distance. The shaded zone is the bottom strip.";$("sUnit").textContent="best cost";log("new random map, "+n+" stops")}
+function loadSanta(){mode="santa";setProj();pts=[];nextId=1;floodId=-1;SANTA.forEach(function(s){var p={id:nextId++,name:s[0],lat:s[1],lon:s[2]};llToUv(p);p.zone=inZone(p);pts.push(p)});costMatrix();initPop();$("modeHint").textContent="Santa Rosa: real coordinates, cost is straight-line km times 1.3 (a detour assumption, not road data). The shaded zone is the Tagaytay Road side. The background shows the 18 real barangay boundaries; roads are not drawn.";$("sUnit").textContent="best cost (km)";log("loaded Santa Rosa, Laguna landmarks")}
+var cv=$("map"),cx=cv.getContext("2d"),ch=$("chart"),cc=ch.getContext("2d"),dpr=1,W=0;
+function size(){dpr=window.devicePixelRatio||1;W=cv.clientWidth;cv.width=Math.round(W*dpr);cv.height=Math.round(W*dpr);ch.width=Math.round(ch.clientWidth*dpr);ch.height=Math.round(ch.clientHeight*dpr)}
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+function px(p){var m=26;return[m+p.u*(W-2*m),m+p.v*(W-2*m)]}
+function ll2(la,lo){var p={lat:la,lon:lo};llToUv(p);return p}
+function drawBase(c){c.lineWidth=1;c.strokeStyle=css("--border");c.font="10px system-ui,sans-serif";c.textAlign="center";BGY.forEach(function(b){var sx=0,sy=0,n=0;c.fillStyle=css("--bgyfill");b[1].forEach(function(ring){c.beginPath();ring.forEach(function(q,i){var a=px(ll2(q[1],q[0]));if(i)c.lineTo(a[0],a[1]);else c.moveTo(a[0],a[1]);sx+=a[0];sy+=a[1];n++});c.closePath();c.fill();c.stroke()});c.fillStyle=css("--muted");c.fillText(b[0],sx/n,sy/n+3)});c.textAlign="left"}
+function draw(){var c=cx;c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,W);c.strokeStyle=css("--grid");c.lineWidth=1;for(var g=1;g<8;g++){var q=g*W/8;c.beginPath();c.moveTo(q,0);c.lineTo(q,W);c.moveTo(0,q);c.lineTo(W,q);c.stroke()}
+if(mode==="santa")drawBase(c);
+if(traffic){c.fillStyle=css("--zone");pts.forEach(function(p){if(p.zone){var a=px(p);c.beginPath();c.arc(a[0],a[1],Math.max(18,W*0.05),0,6.283);c.fill()}})}
+var t=pop[best()];c.strokeStyle=css("--route");c.lineWidth=2.2;c.lineJoin="round";c.beginPath();for(var i=0;i<=t.length;i++){var a=px(pts[t[i%t.length]]);i?c.lineTo(a[0],a[1]):c.moveTo(a[0],a[1])}c.stroke();
+c.font="12px system-ui,sans-serif";pts.forEach(function(p,i){var a=px(p);c.fillStyle=i===0?css("--depot"):(p.id===floodId?css("--flood"):css("--node"));c.beginPath();c.arc(a[0],a[1],i===0?8:(mode==="santa"?6:4.5),0,6.283);c.fill();if(mode==="santa"||p.name){c.fillStyle=css("--text");c.fillText(p.name||"",a[0]+9,a[1]-7)}});
+var b=fit[best()];$("sGen").textContent=gen;$("sBest").textContent=b.toFixed(mode==="santa"?1:0);$("sNn").textContent=nnLen.toFixed(mode==="santa"?1:0);var gn=(nnLen-b)/nnLen*100;$("sGain").textContent=Math.max(0,gn).toFixed(1)+"%"}
+function drawChart(){var c=cc,w=ch.width/dpr,h=ch.height/dpr;c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);if(hist.length<2)return;var mn=Math.min.apply(null,hist),mx=Math.max.apply(null,hist);if(mx-mn<1e-9)mx=mn+1;var L=hist.length;c.font="11px system-ui,sans-serif";marks.forEach(function(m){var x=m[0]/(L-1)*(w-12)+6;c.strokeStyle=css("--border");c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke();c.fillStyle=css("--muted");c.fillText(m[1],x+2,11)});c.strokeStyle=css("--route");c.lineWidth=2;c.beginPath();for(var i=0;i<L;i++){var x=i/(L-1)*(w-12)+6,y=h-8-(hist[i]-mn)/(mx-mn)*(h-26);i?c.lineTo(x,y):c.moveTo(x,y)}c.stroke()}
+function frame(){if(running){var s=+$("rS").value;for(var i=0;i<s;i++)step();hist.push(fit[best()]);if(hist.length>700){hist.shift();marks=marks.map(function(m){return[m[0]-1,m[1]]}).filter(function(m){return m[0]>=0})}}draw();drawChart();requestAnimationFrame(frame)}
+function bind(id,out,fmt){var r=$(id),o=$(out);function u(){o.textContent=fmt(r.value)}r.addEventListener("input",u);u();return r}
+bind("rN","oN",String);bind("rS","oS",String);bind("rM","oM",function(v){return v+"%"});bind("rL","oL",function(v){return v+"%"});
+$("play").addEventListener("click",function(){running=!running;this.textContent=running?"Pause":"Resume"});
+$("rand").addEventListener("click",function(){loadRandom(+$("rN").value)});
+$("santa").addEventListener("click",loadSanta);
+$("rush").addEventListener("click",function(){rushN++;var u,v;if(mode==="santa"){var s=SANTA[3];u=0.5+(s[2]-proj.lonC)*proj.cos*proj.S+(Math.random()-.5)*.12;v=0.5-(s[1]-proj.latC)*proj.S+(Math.random()-.5)*.12}else{u=0.08+Math.random()*0.84;v=0.08+Math.random()*0.84}addStop(mk(u,v,"Express "+rushN),"express order #"+rushN+" appeared; tours repaired, not restarted")});
+$("traffic").addEventListener("click",function(){traffic=!traffic;this.setAttribute("aria-pressed",traffic);costMatrix();score();marks.push([hist.length,"T"]);log(traffic?"traffic jam: links to the shaded zone cost 1.6x":"traffic cleared")});
+$("flood").addEventListener("click",function(){var on=floodId<0;if(on){var i=1+rnd(pts.length-1);if(mode==="santa")i=4;floodId=pts[i].id;log("flood: "+(pts[i].name||"a stop")+" now costs 3x to reach")}else{floodId=-1;log("flood cleared")}this.setAttribute("aria-pressed",on);costMatrix();score();marks.push([hist.length,"F"])});
+var clickAdd=true;function setMode(a){clickAdd=a;$("mAdd").setAttribute("aria-pressed",a);$("mDel").setAttribute("aria-pressed",!a)}
+$("mAdd").addEventListener("click",function(){setMode(true)});$("mDel").addEventListener("click",function(){setMode(false)});
+cv.addEventListener("pointerdown",function(e){var r=cv.getBoundingClientRect(),m=26,x=(e.clientX-r.left-m)/(r.width-2*m),y=(e.clientY-r.top-m)/(r.height-2*m);if(clickAdd){if(x<0||x>1||y<0||y>1)return;addStop(mk(x,y,mode==="santa"?"New stop":""))}else{var bi=-1,bd=22;pts.forEach(function(p,i){var a=px(p),d=Math.hypot(a[0]-(e.clientX-r.left),a[1]-(e.clientY-r.top));if(d<bd){bd=d;bi=i}});if(bi>0)delStop(bi)}});
+function nnTour(){var n=pts.length,left=[],t=[0],i;for(i=1;i<n;i++)left.push(i);while(left.length){var l=t[t.length-1],bi=0;for(i=1;i<left.length;i++)if(D[l][left[i]]<D[l][left[bi]])bi=i;t.push(left[bi]);left.splice(bi,1)}return t}
+function rev(t,l,r){while(l<r){var y=t[l];t[l]=t[r];t[r]=y;l++;r--}}
+function saRun(start,ms){var n=start.length,t=start.slice(),cur=len(t),best=t.slice(),bl=cur,T0=cur/n,T=T0,t0=performance.now(),it=0;while(true){if(it%200===0){var f=(performance.now()-t0)/ms;if(f>=1)break;T=Math.max(T0*Math.pow(1e-3,f),1e-12)}it++;var i=rnd(n),j=rnd(n);if(i===j)continue;if(i>j){var x=i;i=j;j=x}if(i===0&&j===n-1)continue;var a=t[(i+n-1)%n],b=t[i],c=t[j],e=t[(j+1)%n],dl=D[a][c]+D[b][e]-D[a][b]-D[c][e];if(dl<0||Math.random()<Math.exp(-dl/T)){rev(t,i,j);cur+=dl;if(cur<bl-1e-9){bl=cur;best=t.slice()}}}return len(best)}
+function tabuRun(start,ms){var n=start.length,t=start.slice(),cur=len(t),bl=cur,tabu={},it=0,t0=performance.now();while(performance.now()-t0<ms){var mv=null,md=1e18;for(var s=0;s<100;s++){var i=rnd(n),j=rnd(n);if(i===j)continue;if(i>j){var x=i;i=j;j=x}if(i===0&&j===n-1)continue;var a=t[(i+n-1)%n],b=t[i],c=t[j],e=t[(j+1)%n],dl=D[a][c]+D[b][e]-D[a][b]-D[c][e],k=Math.min(a,c)+'-'+Math.max(a,c);if((tabu[k]||-1)>it&&cur+dl>=bl)continue;if(dl<md){md=dl;mv=[i,j,k]}}it++;if(!mv)continue;rev(t,mv[0],mv[1]);cur+=md;tabu[mv[2]]=it+15;if(cur<bl-1e-9)bl=cur}return bl}
+function gaRun(ms){var t0=performance.now(),sv=[pop,fit,gen,hist,marks,nnLen];initPop();pop[0]=nnTour();fit=pop.map(len);var g=0;do{step();g++}while(performance.now()-t0<ms);var b=fit[best()];pop=sv[0];fit=sv[1];gen=sv[2];hist=sv[3];marks=sv[4];nnLen=sv[5];return[b,g]}
+function race(){var ms=+$('raceMs').value,out=$('raceOut'),was=running;running=false;out.textContent='Racing... every method gets '+ms+' ms.';setTimeout(function(){var nt=nnTour(),res=[['Greedy (nearest neighbour)',len(nt)]],t2=nt.slice();for(var k=0;k<6;k++)twoOpt(t2);res.push(['2-opt',len(t2)]);res.push(['Simulated annealing',saRun(nt,ms)]);res.push(['Tabu search',tabuRun(nt,ms)]);var g=gaRun(ms);res.push(['Genetic algorithm ('+g[1]+' gens)',g[0]]);var mn=Math.min.apply(null,res.map(function(r){return r[1]})),h='<table class=rt><tr><th>Method</th><th>Cost</th><th>vs best</th></tr>';res.forEach(function(r){h+='<tr'+(r[1]===mn?' class=win':'')+'><td>'+r[0]+'</td><td>'+r[1].toFixed(mode==='santa'?1:0)+'</td><td>'+(100*(r[1]-mn)/mn).toFixed(1)+'%</td></tr>'});out.innerHTML=h+'</table>';running=was},40)}
+$('race').addEventListener('click',race);
+function setFlags(tr,fl){traffic=tr;$('traffic').setAttribute('aria-pressed',tr);if(fl&&pts.length>1)floodId=pts[mode==='santa'?4:1+rnd(pts.length-1)].id;else floodId=-1;$('flood').setAttribute('aria-pressed',fl);costMatrix();score()}
+var SC={S1:['santa',10,false,false,'10 Santa Rosa stops. Python: GA, SA and Tabu all reach the exact optimum; greedy is 4.2% above. Race it here.'],S2:['random',120,false,false,'Large batch (120 stops here, 150 in Python). Python, 6 s: GA 958.5, SA 973.0, 2-opt 1012.9, Tabu 1122.3. Try a 3 s race.'],S3:['random',60,false,false,'Real-time dispatch, 60 stops. Python, 250 ms: GA 627.8, SA 645.4, Tabu 651.4, 2-opt 663.5. Race with a 250 ms budget.'],S4:['random',60,false,false,'Orders arrive and cancel. Press Rush order and click to add or remove stops while it evolves. Python: GA 0.1% to 0.9% above best, SA and Tabu 2.4% to 3.2%.'],S5:['santa',10,true,true,'Traffic and flooding on Santa Rosa. Python: all metaheuristics optimal, greedy 37.9% above optimum under flooding. Race it here.']};
+document.querySelectorAll('#scBtns button').forEach(function(b){b.addEventListener('click',function(){var k=b.dataset.sc,s=SC[k];setFlags(false,false);if(s[0]==='santa')loadSanta();else{$('rN').value=s[1];$('oN').textContent=s[1];loadRandom(s[1])}setFlags(s[2],s[3]);$('scDesc').textContent=s[4];log('scenario '+k+' loaded')})});
+window.addEventListener("resize",size);
+size();loadRandom(30);requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
